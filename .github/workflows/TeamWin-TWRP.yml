@@ -57,7 +57,7 @@ on:
 jobs:
   build:
     name: Build TWRP by ${{ github.actor }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest # Using the latest stable Ubuntu LTS
     if: github.event.repository.owner.id == github.event.sender.id
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -66,7 +66,7 @@ jobs:
     steps:
     - name: Check Out
       uses: actions/checkout@v3
-      
+
     - name: Display Inputs
       run: |
         echo "Displaying variables/inputs."
@@ -79,17 +79,17 @@ jobs:
 
     - name: Cleanup
       uses: rokibhasansagar/slimhub_actions@main
-      
+
     - name: Set Swap Space
       uses: pierotofy/set-swap-space@master
       with:
         swap-size-gb: 12
-        
+
     - name: Prepare the environment
       run: |
         sudo apt update
         sudo apt -y upgrade
-        sudo apt -y install gperf gcc-multilib gcc-10-multilib g++-multilib g++-10-multilib libc6-dev lib32ncurses5-dev x11proto-core-dev libx11-dev tree lib32z-dev libgl1-mesa-dev libxml2-utils xsltproc bc ccache lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libwxgtk3.0-gtk3-dev libxml2 lzop pngcrush schedtool squashfs-tools imagemagick libbz2-dev lzma ncftp qemu-user-static libstdc++-10-dev libtinfo5 libgflags-dev libncurses5 python3
+        sudo apt -y install gperf gcc-multilib g++-multilib libc6-dev lib32ncurses5-dev x11proto-core-dev libx11-dev tree lib32z-dev libgl1-mesa-dev libxml2-utils xsltproc bc ccache lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libwxgtk3.0-gtk3-dev libxml2 lzop pngcrush schedtool squashfs-tools imagemagick libbz2-dev lzma ncftp qemu-user-static libstdc++-dev libtinfo5 libgflags-dev libncurses5 python3
         sudo add-apt-repository universe
 
     - name: Install OpenJDK
@@ -100,7 +100,7 @@ jobs:
 
     - name: Install Git-Repo
       run: |
-        mkdir ~/bin
+        mkdir -p ~/bin
         curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
         chmod a+x ~/bin/repo
         sudo ln -sf ~/bin/repo /usr/bin/repo
@@ -123,19 +123,19 @@ jobs:
 
     - name: Set build target for upload
       run: |
-        if [ ${{ github.event.inputs.BUILD_TARGET }} == 'recovery' ]; then
-           echo "BUILD_TARGET_NAME=recovery" >> $GITHUB_ENV
-        elif [ ${{ github.event.inputs.BUILD_TARGET }} == 'boot' ]; then
-           echo "BUILD_TARGET_NAME=boot" >> $GITHUB_ENV
+        if [ "${{ github.event.inputs.BUILD_TARGET }}" == 'recovery' ]; then
+          echo "BUILD_TARGET_NAME=recovery" >> $GITHUB_ENV
+        elif [ "${{ github.event.inputs.BUILD_TARGET }}" == 'boot' ]; then
+          echo "BUILD_TARGET_NAME=boot" >> $GITHUB_ENV
         else
-           echo "BUILD_TARGET_NAME=vendor_boot" >> $GITHUB_ENV
+          echo "BUILD_TARGET_NAME=vendor_boot" >> $GITHUB_ENV
         fi
 
     - name: Repo Sync
       run: |
         cd android-recovery
         repo sync -j$(nproc --all) --force-sync
-      
+
     - name: Clone Device Tree
       run: |
         cd android-recovery
@@ -148,27 +148,27 @@ jobs:
     - name: Check Build Makefile
       run: |
         cd android-recovery
-        if [ -f ${{ github.event.inputs.DEVICE_PATH }}/twrp_${{ github.event.inputs.DEVICE_NAME}}.mk ]; then
-            echo "DEVICE_MAKEFILE=twrp_${{ github.event.inputs.DEVICE_NAME }}" >> $GITHUB_ENV
-        elif [ -f ${{ github.event.inputs.DEVICE_PATH }}/omni_${{ github.event.inputs.DEVICE_NAME}}.mk ]; then
-            echo "DEVICE_MAKEFILE=omni_${{ github.event.inputs.DEVICE_NAME }}" >> $GITHUB_ENV
+        if [ -f "${{ github.event.inputs.DEVICE_PATH }}/twrp_${{ github.event.inputs.DEVICE_NAME}}.mk" ]; then
+          echo "DEVICE_MAKEFILE=twrp_${{ github.event.inputs.DEVICE_NAME }}" >> $GITHUB_ENV
+        elif [ -f "${{ github.event.inputs.DEVICE_PATH }}/omni_${{ github.event.inputs.DEVICE_NAME}}.mk" ]; then
+          echo "DEVICE_MAKEFILE=omni_${{ github.event.inputs.DEVICE_NAME }}" >> $GITHUB_ENV
         else
-            echo "No recovery makefile file found!"
+          echo "No recovery makefile file found!"
         fi
       continue-on-error: true
-      
-    - name: Building Image 
+
+    - name: Building Image
       run: |
         cd android-recovery
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
         lunch ${{ env.DEVICE_MAKEFILE }}-eng && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
         echo "Done building your ${{ github.event.inputs.BUILD_TARGET }}.img"
-      
+
     - name: Set Build Date # Output will be use in Release
       run: |
         echo "BUILD_DATE=$(date +%Y%m%d)" >> $GITHUB_ENV
-      
+
     - name: Upload to Release
       uses: softprops/action-gh-release@v1
       with:
@@ -185,9 +185,10 @@ jobs:
       if: github.event.inputs.LDCHECK == 'true'
       run: |
         cd tools
-        mv -n libneeds ${GITHUB_WORKSPACE}/android-recovery/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery/root/
-        mv -n ldcheck ${GITHUB_WORKSPACE}/android-recovery/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery/root/
-        cd ../android-recovery/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery/root
+        mkdir -p ${{ github.workspace }}/android-recovery/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery/root/
+        mv -n libneeds ${{ github.workspace }}/android-recovery/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery/root/
+        mv -n ldcheck ${{ github.workspace }}/android-recovery/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery/root/
+        cd ${{ github.workspace }}/android-recovery/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery/root
         python3 ldcheck -p system/lib64:vendor/lib64:system/lib:vendor/lib -d ${{ github.event.inputs.LDCHECKPATH }}
         echo "Done checking missing dependencies. Review, and reconfigure your tree."
       continue-on-error: true
